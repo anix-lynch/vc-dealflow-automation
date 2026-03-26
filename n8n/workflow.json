@@ -1,0 +1,452 @@
+{
+  "name": "VC Deal Flow — Apollo + Hunter + Claude + Airtable",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "investor-ingest",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Webhook — Receive Contact",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 400],
+      "webhookId": "vc-dealflow-ingest-001"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/v1/people/match",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "api_key": "={{ $env.APOLLO_API_KEY }}",
+          "first_name": "={{ $json.body.name.split(' ')[0] }}",
+          "last_name": "={{ $json.body.name.split(' ').slice(1).join(' ') }}",
+          "organization_name": "={{ $json.body.firm }}",
+          "email": "={{ $json.body.email }}",
+          "linkedin_url": "={{ $json.body.linkedin }}",
+          "reveal_personal_emails": true
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Apollo — Enrich Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.hunter.io/v2/email-verifier?email={{ encodeURIComponent($json.body.person?.email ?? $node['Webhook — Receive Contact'].json.body.email) }}&api_key={{ $env.HUNTER_API_KEY }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Hunter — Verify Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "condition-email-valid",
+              "leftValue": "={{ $json.body.data.result }}",
+              "rightValue": "undeliverable",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0004-4000-8000-000000000004",
+      "name": "IF — Email Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [960, 400]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-001",
+              "name": "contact_name",
+              "value": "={{ $node['Webhook — Receive Contact'].json.body.name }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-002",
+              "name": "firm",
+              "value": "={{ $node['Apollo — Enrich Contact'].json.body.person?.organization?.name ?? $node['Webhook — Receive Contact'].json.body.firm }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-003",
+              "name": "title",
+              "value": "={{ $node['Apollo — Enrich Contact'].json.body.person?.title ?? 'Unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-004",
+              "name": "email",
+              "value": "={{ $node['Apollo — Enrich Contact'].json.body.person?.email ?? $node['Webhook — Receive Contact'].json.body.email }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-005",
+              "name": "linkedin_url",
+              "value": "={{ $node['Apollo — Enrich Contact'].json.body.person?.linkedin_url ?? $node['Webhook — Receive Contact'].json.body.linkedin }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-006",
+              "name": "industry",
+              "value": "={{ $node['Apollo — Enrich Contact'].json.body.person?.organization?.industry ?? 'Unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-007",
+              "name": "seniority",
+              "value": "={{ $node['Apollo — Enrich Contact'].json.body.person?.seniority ?? 'Unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-008",
+              "name": "email_verified",
+              "value": "=true",
+              "type": "boolean"
+            },
+            {
+              "id": "assign-009",
+              "name": "email_deliverability",
+              "value": "={{ $node['Hunter — Verify Email'].json.body.data.result }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-010",
+              "name": "enriched",
+              "value": "=true",
+              "type": "boolean"
+            },
+            {
+              "id": "assign-011",
+              "name": "city",
+              "value": "={{ $node['Apollo — Enrich Contact'].json.body.person?.city ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-012",
+              "name": "country",
+              "value": "={{ $node['Apollo — Enrich Contact'].json.body.person?.country ?? '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0005-4000-8000-000000000005",
+      "name": "Set — Compose Enriched Contact",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1200, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": {
+          "model": "claude-3-5-sonnet-20241022",
+          "max_tokens": 400,
+          "system": "You are a VC relationship manager with 10 years of experience at top-tier venture funds in Southeast Asia and globally. You write warm, intelligent, non-spammy outreach emails to investors, LPs, and founders. Your messages are concise, specific to the firm, and never sound like a template. You reference what the firm actually invests in, not generic platitudes. You write like a peer, not a vendor. Respond with ONLY the personalized message — no subject line, no preamble, just the body text (3 sentences max).",
+          "messages": [
+            {
+              "role": "user",
+              "content": "=Write a personalized cold outreach first paragraph for this investor contact:\n\nName: {{ $json.contact_name }}\nFirm: {{ $json.firm }}\nTitle: {{ $json.title }}\nIndustry focus: {{ $json.industry }}\nLocation: {{ $json.city }}, {{ $json.country }}\nSeniority: {{ $json.seniority }}\n\nContext: I'm Anix Lynch, ex-GP at Expara Venture Capital (Southeast Asia, 50+ portfolio companies). I'm reaching out to explore co-investment opportunities, LP relationships, or deal flow sharing. Keep it 2-3 sentences. Be specific to their firm and focus. No fluff."
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "a1b2c3d4-0006-4000-8000-000000000006",
+      "name": "Claude — Generate Outreach Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, 300]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "={{ $env.AIRTABLE_BASE_ID }}",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "Contacts",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Name": "={{ $node['Set — Compose Enriched Contact'].json.contact_name }}",
+            "Firm": "={{ $node['Set — Compose Enriched Contact'].json.firm }}",
+            "Title": "={{ $node['Set — Compose Enriched Contact'].json.title }}",
+            "Email": "={{ $node['Set — Compose Enriched Contact'].json.email }}",
+            "LinkedIn": "={{ $node['Set — Compose Enriched Contact'].json.linkedin_url }}",
+            "Industry": "={{ $node['Set — Compose Enriched Contact'].json.industry }}",
+            "Stage": "Lead",
+            "Email Verified": "={{ $node['Set — Compose Enriched Contact'].json.email_verified }}",
+            "Enriched": "={{ $node['Set — Compose Enriched Contact'].json.enriched }}",
+            "Outreach Sent": false,
+            "Last Activity": "={{ new Date().toISOString().split('T')[0] }}",
+            "Claude Message": "={{ $json.body.content[0].text }}",
+            "Notes": "=Enriched via Apollo. Email verified via Hunter ({{ $node['Set — Compose Enriched Contact'].json.email_deliverability }}). Auto-ingested {{ new Date().toISOString() }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0007-4000-8000-000000000007",
+      "name": "Airtable — Create Contact Record",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [1680, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable-cred-001",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "webhookUri": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "text": "=:rocket: *New investor contact processed*\n\n*Name:* {{ $node['Set — Compose Enriched Contact'].json.contact_name }}\n*Firm:* {{ $node['Set — Compose Enriched Contact'].json.firm }}\n*Title:* {{ $node['Set — Compose Enriched Contact'].json.title }}\n*Email:* {{ $node['Set — Compose Enriched Contact'].json.email }} ✅ verified\n*Industry:* {{ $node['Set — Compose Enriched Contact'].json.industry }}\n\n*Claude outreach:*\n_{{ $node['Claude — Generate Outreach Message'].json.body.content[0].text }}_\n\n<https://airtable.com/{{ $env.AIRTABLE_BASE_ID }}|View in Investor Pipeline>",
+        "options": {
+          "username": "DealFlow Bot",
+          "icon_emoji": ":chart_with_upwards_trend:"
+        }
+      },
+      "id": "a1b2c3d4-0008-4000-8000-000000000008",
+      "name": "Slack — Notify #dealflow",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1920, 300],
+      "credentials": {
+        "slackApi": {
+          "id": "slack-cred-001",
+          "name": "Slack Webhook"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"contact\": \"{{ $node['Set — Compose Enriched Contact'].json.contact_name }}\",\n  \"firm\": \"{{ $node['Set — Compose Enriched Contact'].json.firm }}\",\n  \"email_verified\": true,\n  \"airtable_id\": \"{{ $node['Airtable — Create Contact Record'].json.id }}\"\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "a1b2c3d4-0009-4000-8000-000000000009",
+      "name": "Respond — 200 Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2160, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"skipped\",\n  \"reason\": \"email_undeliverable\",\n  \"contact\": \"{{ $node['Webhook — Receive Contact'].json.body.name }}\",\n  \"email\": \"{{ $node['Webhook — Receive Contact'].json.body.email }}\"\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "a1b2c3d4-0010-4000-8000-000000000010",
+      "name": "Respond — Skipped (Invalid Email)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1200, 560]
+    }
+  ],
+  "connections": {
+    "Webhook — Receive Contact": {
+      "main": [
+        [
+          {
+            "node": "Apollo — Enrich Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apollo — Enrich Contact": {
+      "main": [
+        [
+          {
+            "node": "Hunter — Verify Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hunter — Verify Email": {
+      "main": [
+        [
+          {
+            "node": "IF — Email Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF — Email Valid?": {
+      "main": [
+        [
+          {
+            "node": "Set — Compose Enriched Contact",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond — Skipped (Invalid Email)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set — Compose Enriched Contact": {
+      "main": [
+        [
+          {
+            "node": "Claude — Generate Outreach Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude — Generate Outreach Message": {
+      "main": [
+        [
+          {
+            "node": "Airtable — Create Contact Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable — Create Contact Record": {
+      "main": [
+        [
+          {
+            "node": "Slack — Notify #dealflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack — Notify #dealflow": {
+      "main": [
+        [
+          {
+            "node": "Respond — 200 Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2026-03-25T00:00:00.000Z",
+      "updatedAt": "2026-03-25T00:00:00.000Z",
+      "id": "tag-vc-dealflow",
+      "name": "vc-dealflow"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-03-25T00:00:00.000Z",
+  "versionId": "v1.0.0"
+}
