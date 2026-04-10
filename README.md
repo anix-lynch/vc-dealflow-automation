@@ -197,3 +197,5 @@ MIT. Fork it, adapt it, ship it. If it closes a deal for you, I'd love to hear a
 ---
 
 **Built by Anix Lynch | Ex-GP Expara Venture | MBA Chicago Booth | [gozeroshot.dev](https://gozeroshot.dev)**
+
+💨
