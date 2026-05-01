@@ -6,6 +6,23 @@
 
 ---
 
+---
+
+## Repository structure
+
+```
+vc-dealflow-automation/
+├── airtable/
+│   └── schema.json
+├── n8n/
+│   └── workflow.json
+├── prompts/
+│   └── outreach_personalization.md
+├── scripts/
+│   └── enrich_batch.py
+└── README.md
+```
+
 ## What This Does
 
 End-to-end investor database enrichment, email verification, and personalized outreach automation for VC firms, family offices, and startup founders running investor relations at scale.
